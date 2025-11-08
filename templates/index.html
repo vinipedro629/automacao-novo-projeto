@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Upload e Mapeamento de Planilha</title>
+    <style>
+      #dashboard {
+        margin-top: 28px;
+        width: 100%;
+        padding: 16px;
+        border: 1px solid #eee;
+        border-radius: 12px;
+        box-sizing: border-box;
+      }
+      #dashboard h3 {
+        font-size: 18px;
+        margin-bottom: 12px;
+        text-align: center;
+      }
+      .dashboard-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        justify-content: center;
+        align-items: flex-start;
+      }
+      .dashboard-row canvas {
+        box-shadow: 0 0 8px #ccd;
+        border-radius: 12px;
+        background: #fff;
+        margin: 12px 0;
+        width: 100%;
+        max-width: 330px;
+        height: 260px;
+      }
+      @media (max-width: 900px) {
+        .dashboard-row canvas {
+          max-width: 210px;
+          height: 170px;
+        }
+      }
+      @media (max-width: 600px) {
+        .dashboard-row {
+          flex-direction: column;
+          align-items: center;
+        }
+        #dashboard {
+          padding: 6px;
+          border-radius: 8px;
+        }
+        #dashboard h3 {
+          font-size: 16px;
+        }
+        .dashboard-row canvas {
+          min-width: 150px;
+          height: 200px;
+        }
+      }
+      /* restante igual ao seu projeto */
+      #drop-area {
+        border: 2px dashed #666;
+        border-radius: 10px;
+        width: 100%;
+        padding: 30px;
+        text-align: center;
+        margin-bottom: 20px;
+        transition: border-color 0.3s;
+      }
+      #drop-area.dragover {
+        border-color: #667eea;
+        background: #f0f4ff;
+      }
+      #fileElem {
+        display: none;
+      }
+      #fileName {
+        margin-top: 10px;
+        color: #333;
+        font-weight: bold;
+      }
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
+      .table th,
+      .table td {
+        border: 1px solid #999;
+        padding: 6px;
+      }
+      .table-striped tr:nth-child(even) {
+        background: #f4f4f4;
+      }
+      .campo-label {
+        font-weight: bold;
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <h2>Upload e Mapeamento de Planilha</h2>
+    {% with messages = get_flashed_messages() %} {% if messages %}
+    <ul>
+      {% for message in messages %}
+      <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %} {% endwith %} {% if not mapping_needed and not selecao_parcial
+    and not pronto_automacao %}
+    <form method="post" enctype="multipart/form-data" id="uploadForm">
+      <div id="drop-area">
+        <p>
+          Arraste o arquivo Excel/CSV/TXT aqui ou
+          <label for="fileElem" style="color: blue; cursor: pointer"
+            >clique para escolher</label
+          >
+        </p>
+        <input
+          type="file"
+          name="file"
+          id="fileElem"
+          accept=".xlsx,.csv,.txt"
+          required
+        />
+        <div id="fileName"></div>
+      </div>
+      <button type="submit">Enviar e Visualizar</button>
+    </form>
+    {% endif %} {% if columns and mapping_needed %}
+    <h3>Mapeie os campos do sistema para as colunas do seu arquivo:</h3>
+    <form method="post">
+      <input type="hidden" name="mapping" value="ok" />
+      <table>
+        {% for campo in campi_sistema %}
+        <tr>
+          <td class="campo-label">{{ campo }}</td>
+          <td>
+            <select name="{{ campo }}" required>
+              <option value="">-- Selecione coluna --</option>
+              {% for col in columns %}
+              <option value="{{ col }}">{{ col }}</option>
+              {% endfor %}
+            </select>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      <button type="submit">Salvar Mapeamento</button>
+    </form>
+    {% endif %} {% if selecao_parcial %}
+    <h3>Selecione as linhas que deseja automatizar:</h3>
+    <form method="post">
+      <input type="hidden" name="filtrar_e_processar" value="1" />
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>Selecionar</th>
+            {% for c in columns %}
+            <th>{{ c }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in dados %}
+          <tr>
+            <td>
+              <input
+                type="checkbox"
+                name="selected"
+                value="{{ loop.index0 }}"
+                checked
+              />
+            </td>
+            {% for c in columns %}
+            <td>{{ row[c] }}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <button type="submit">Automatizar Selecionados</button>
+    </form>
+    {% endif %} {% if preview %}
+    <h3>Preview dos Dados Selecionados:</h3>
+    {{ preview|safe }} {% endif %} {% if pronto_automacao %}
+    <button onclick="iniciarAutomacao()">Iniciar Automação</button>
+    <div id="progress-bar-wrap" style="display: none">
+      <label>Progresso:</label>
+      <div
+        style="
+          border: 1px solid #666;
+          height: 24px;
+          width: 100%;
+          max-width: 340px;
+          border-radius: 8px;
+        "
+      >
+        <div
+          id="progress-bar"
+          style="background: #3a6; width: 0%; height: 24px"
+        ></div>
+      </div>
+      <span id="progress-info"></span>
+    </div>
+    <div id="logs" style="margin-top: 20px"></div>
+    <div id="relatorio-link" style="margin-top: 20px"></div>
+    <div id="dashboard" style="display: none">
+      <h3>Dashboard</h3>
+      <div class="dashboard-row">
+        <canvas id="graficoStatus"></canvas>
+        <canvas id="graficoCategorias"></canvas>
+      </div>
+    </div>
+    {% endif %}
+
+    <script>
+      const dropArea = document.getElementById("drop-area");
+      const fileElem = document.getElementById("fileElem");
+      const uploadForm = document.getElementById("uploadForm");
+      const fileNameDiv = document.getElementById("fileName");
+      if (dropArea && fileElem && uploadForm) {
+        dropArea.addEventListener("click", () => fileElem.click());
+        dropArea.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          dropArea.classList.add("dragover");
+        });
+        dropArea.addEventListener("dragleave", () => {
+          dropArea.classList.remove("dragover");
+        });
+        dropArea.addEventListener("drop", (e) => {
+          e.preventDefault();
+          dropArea.classList.remove("dragover");
+          if (e.dataTransfer.files.length > 0) {
+            fileElem.files = e.dataTransfer.files;
+            fileNameDiv.textContent = e.dataTransfer.files[0].name;
+            uploadForm.submit();
+          }
+        });
+        fileElem.addEventListener("change", function () {
+          if (fileElem.files.length > 0) {
+            fileNameDiv.textContent = fileElem.files[0].name;
+          }
+        });
+      }
+
+      function iniciarAutomacao() {
+        fetch("/start_automacao", { method: "POST" })
+          .then((resp) => resp.json())
+          .then((data) => {
+            document.getElementById("progress-bar-wrap").style.display = "";
+            atualizarStatus(data.session_id);
+          });
+      }
+
+      function atualizarStatus(session_id) {
+        fetch("/status_automacao/" + session_id)
+          .then((resp) => resp.json())
+          .then((status) => {
+            if (!status.total) return;
+            const pct = (status.current / status.total) * 100;
+            document.getElementById("progress-bar").style.width = pct + "%";
+            document.getElementById(
+              "progress-info"
+            ).textContent = `${status.current} de ${status.total}`;
+            document.getElementById("logs").innerHTML = status.logs
+              .map((l) => `<div>${l}</div>`)
+              .join("");
+            if (status.done && status.relatorio_path) {
+              document.getElementById(
+                "relatorio-link"
+              ).innerHTML = `<a href="/download_relatorio/${session_id}" target="_blank">Baixar Relatório CSV</a>`;
+              if (status.stats) {
+                document.getElementById("dashboard").style.display = "";
+                renderDashboard(status.stats);
+              }
+            }
+            if (!status.done)
+              setTimeout(() => atualizarStatus(session_id), 1000);
+          });
+      }
+      function renderDashboard(stats) {
+        // Pie visual, responsivo
+        const ctx1 = document.getElementById("graficoStatus").getContext("2d");
+        new Chart(ctx1, {
+          type: "doughnut",
+          data: {
+            labels: ["Sucessos", "Erros"],
+            datasets: [
+              {
+                data: [stats.sucesso, stats.erro],
+                backgroundColor: ["#2ab74b", "#e22"],
+              },
+            ],
+          },
+          options: {
+            plugins: { legend: { display: true, position: "bottom" } },
+            cutout: "60%",
+            responsive: true,
+            maintainAspectRatio: false,
+          },
+        });
+        if (stats.categorias) {
+          const ctx2 = document
+            .getElementById("graficoCategorias")
+            .getContext("2d");
+          new Chart(ctx2, {
+            type: "bar",
+            data: {
+              labels: Object.keys(stats.categorias),
+              datasets: [
+                {
+                  data: Object.values(stats.categorias),
+                  backgroundColor: "#3399ff",
+                },
+              ],
+            },
+            options: {
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { ticks: { font: { size: 13 } } },
+                y: {
+                  beginAtZero: true,
+                  display: true,
+                  grid: { display: true },
+                },
+              },
+              responsive: true,
+              maintainAspectRatio: false,
+            },
+          });
+        }
+      }
+    </script>
+  </body>
+</html>
