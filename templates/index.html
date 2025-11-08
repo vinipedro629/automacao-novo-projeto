@@ -3,26 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <title>Upload e Mapeamento de Planilha</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
     <style>
-      #dashboard {
-        margin-top: 28px;
-        width: 100%;
-        padding: 16px;
-        border: 1px solid #eee;
-        border-radius: 12px;
-        box-sizing: border-box;
-      }
-      #dashboard h3 {
-        font-size: 18px;
-        margin-bottom: 12px;
-        text-align: center;
-      }
       .dashboard-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 20px;
+        gap: 40px;
         justify-content: center;
-        align-items: flex-start;
       }
       .dashboard-row canvas {
         box-shadow: 0 0 8px #ccd;
@@ -30,219 +20,170 @@
         background: #fff;
         margin: 12px 0;
         width: 100%;
-        max-width: 330px;
+        max-width: 340px;
         height: 260px;
+        min-width: 220px;
       }
-      @media (max-width: 900px) {
-        .dashboard-row canvas {
-          max-width: 210px;
-          height: 170px;
-        }
-      }
-      @media (max-width: 600px) {
-        .dashboard-row {
-          flex-direction: column;
-          align-items: center;
-        }
-        #dashboard {
-          padding: 6px;
-          border-radius: 8px;
-        }
-        #dashboard h3 {
-          font-size: 16px;
-        }
-        .dashboard-row canvas {
-          min-width: 150px;
-          height: 200px;
-        }
-      }
-      /* restante igual ao seu projeto */
-      #drop-area {
-        border: 2px dashed #666;
-        border-radius: 10px;
-        width: 100%;
-        padding: 30px;
-        text-align: center;
-        margin-bottom: 20px;
-        transition: border-color 0.3s;
-      }
-      #drop-area.dragover {
-        border-color: #667eea;
-        background: #f0f4ff;
-      }
-      #fileElem {
-        display: none;
-      }
-      #fileName {
-        margin-top: 10px;
-        color: #333;
-        font-weight: bold;
-      }
-      .table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 20px;
-      }
+      /* tabelas pandas responsivas e alinhadas */
       .table th,
       .table td {
-        border: 1px solid #999;
-        padding: 6px;
+        text-align: center;
+        vertical-align: middle !important;
+        white-space: nowrap;
+        min-width: 110px;
       }
-      .table-striped tr:nth-child(even) {
-        background: #f4f4f4;
-      }
-      .campo-label {
-        font-weight: bold;
+      .table th {
+        font-size: 1.09em;
+        background: #f8f9fa;
       }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
-  <body>
-    <h2>Upload e Mapeamento de Planilha</h2>
-    {% with messages = get_flashed_messages() %} {% if messages %}
-    <ul>
-      {% for message in messages %}
-      <li>{{ message }}</li>
-      {% endfor %}
-    </ul>
-    {% endif %} {% endwith %} {% if not mapping_needed and not selecao_parcial
-    and not pronto_automacao %}
-    <form method="post" enctype="multipart/form-data" id="uploadForm">
-      <div id="drop-area">
-        <p>
-          Arraste o arquivo Excel/CSV/TXT aqui ou
-          <label for="fileElem" style="color: blue; cursor: pointer"
-            >clique para escolher</label
-          >
-        </p>
-        <input
-          type="file"
-          name="file"
-          id="fileElem"
-          accept=".xlsx,.csv,.txt"
-          required
-        />
-        <div id="fileName"></div>
-      </div>
-      <button type="submit">Enviar e Visualizar</button>
-    </form>
-    {% endif %} {% if columns and mapping_needed %}
-    <h3>Mapeie os campos do sistema para as colunas do seu arquivo:</h3>
-    <form method="post">
-      <input type="hidden" name="mapping" value="ok" />
-      <table>
-        {% for campo in campi_sistema %}
-        <tr>
-          <td class="campo-label">{{ campo }}</td>
-          <td>
-            <select name="{{ campo }}" required>
-              <option value="">-- Selecione coluna --</option>
-              {% for col in columns %}
-              <option value="{{ col }}">{{ col }}</option>
-              {% endfor %}
-            </select>
-          </td>
-        </tr>
+  <body class="bg-light">
+    <div class="container py-4">
+      <h2 class="mb-4 text-center">Upload e Mapeamento de Planilha</h2>
+      {% with messages = get_flashed_messages() %} {% if messages %}
+      <div class="alert alert-info">
+        {% for message in messages %}
+        <div>{{ message }}</div>
         {% endfor %}
-      </table>
-      <button type="submit">Salvar Mapeamento</button>
-    </form>
-    {% endif %} {% if selecao_parcial %}
-    <h3>Selecione as linhas que deseja automatizar:</h3>
-    <form method="post">
-      <input type="hidden" name="filtrar_e_processar" value="1" />
-      <table class="table table-striped">
-        <thead>
-          <tr>
-            <th>Selecionar</th>
-            {% for c in columns %}
-            <th>{{ c }}</th>
-            {% endfor %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in dados %}
-          <tr>
-            <td>
-              <input
-                type="checkbox"
-                name="selected"
-                value="{{ loop.index0 }}"
-                checked
-              />
-            </td>
-            {% for c in columns %}
-            <td>{{ row[c] }}</td>
-            {% endfor %}
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      <button type="submit">Automatizar Selecionados</button>
-    </form>
-    {% endif %} {% if preview %}
-    <h3>Preview dos Dados Selecionados:</h3>
-    {{ preview|safe }} {% endif %} {% if pronto_automacao %}
-    <button onclick="iniciarAutomacao()">Iniciar Automação</button>
-    <div id="progress-bar-wrap" style="display: none">
-      <label>Progresso:</label>
-      <div
-        style="
-          border: 1px solid #666;
-          height: 24px;
-          width: 100%;
-          max-width: 340px;
-          border-radius: 8px;
-        "
+      </div>
+      {% endif %} {% endwith %} {% if not mapping_needed and not selecao_parcial
+      and not pronto_automacao %}
+      <form
+        method="post"
+        enctype="multipart/form-data"
+        id="uploadForm"
+        class="card p-4 shadow-sm mb-4"
       >
-        <div
-          id="progress-bar"
-          style="background: #3a6; width: 0%; height: 24px"
-        ></div>
+        <div class="mb-3">
+          <label for="fileElem" class="form-label"
+            >Selecione um arquivo Excel/CSV/TXT</label
+          >
+          <input
+            type="file"
+            class="form-control"
+            name="file"
+            id="fileElem"
+            accept=".xlsx,.csv,.txt"
+            required
+          />
+        </div>
+        <button type="submit" class="btn btn-primary">
+          Enviar e Visualizar
+        </button>
+      </form>
+      {% endif %} {% if columns and mapping_needed %}
+      <div class="card p-4 shadow-sm mb-4">
+        <h5 class="mb-3">
+          Selecione e (opcionalmente) renomeie as colunas do seu arquivo:
+        </h5>
+        <form method="post">
+          <input type="hidden" name="mapping" value="ok" />
+          <table class="table table-bordered align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Coluna</th>
+                <th>Selecionar</th>
+                <th>Renomear (opcional)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for col in columns %}
+              <tr>
+                <td>{{ col }}</td>
+                <td class="text-center">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    name="colunas_selecionadas"
+                    value="{{ col }}"
+                    checked
+                  />
+                </td>
+                <td>
+                  <input
+                    class="form-control"
+                    type="text"
+                    name="novo_nome_{{ col }}"
+                    placeholder="Novo nome (opcional)"
+                  />
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <button type="submit" class="btn btn-success mt-2">
+            Salvar Seleção
+          </button>
+        </form>
       </div>
-      <span id="progress-info"></span>
-    </div>
-    <div id="logs" style="margin-top: 20px"></div>
-    <div id="relatorio-link" style="margin-top: 20px"></div>
-    <div id="dashboard" style="display: none">
-      <h3>Dashboard</h3>
-      <div class="dashboard-row">
-        <canvas id="graficoStatus"></canvas>
-        <canvas id="graficoCategorias"></canvas>
+      {% endif %} {% if selecao_parcial %}
+      <div class="card p-4 shadow-sm mb-4">
+        <h5 class="mb-3">Selecione as linhas que deseja automatizar:</h5>
+        <form method="post">
+          <input type="hidden" name="filtrar_e_processar" value="1" />
+          <table class="table table-striped table-bordered align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Selecionar</th>
+                {% for c in columns %}
+                <th>{{ c }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in dados %}
+              <tr>
+                <td class="text-center">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    name="selected"
+                    value="{{ loop.index0 }}"
+                    checked
+                  />
+                </td>
+                {% for c in columns %}
+                <td>{{ row[c] }}</td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <button type="submit" class="btn btn-success mt-2">
+            Automatizar Selecionados
+          </button>
+        </form>
       </div>
+      {% endif %} {% if preview %}
+      <div class="card p-4 shadow-sm mb-4">
+        <h5 class="mb-3">Preview dos Dados Selecionados:</h5>
+        <div class="table-responsive">{{ preview|safe }}</div>
+      </div>
+      {% endif %} {% if pronto_automacao %}
+      <div class="card p-4 shadow-sm mb-4">
+        <button onclick="iniciarAutomacao()" class="btn btn-danger mb-3">
+          Iniciar Automação
+        </button>
+        <div id="progress-bar-wrap" style="display: none">
+          <label>Progresso:</label>
+          <div class="progress mb-2">
+            <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
+          </div>
+          <span id="progress-info"></span>
+        </div>
+        <div id="logs" class="mb-3"></div>
+        <div id="relatorio-link" class="mb-3"></div>
+        <div id="dashboard" style="display: none">
+          <h3 class="text-center">Dashboard</h3>
+          <div class="dashboard-row" id="dashboard-rows"></div>
+        </div>
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
-
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-      const dropArea = document.getElementById("drop-area");
-      const fileElem = document.getElementById("fileElem");
-      const uploadForm = document.getElementById("uploadForm");
-      const fileNameDiv = document.getElementById("fileName");
-      if (dropArea && fileElem && uploadForm) {
-        dropArea.addEventListener("click", () => fileElem.click());
-        dropArea.addEventListener("dragover", (e) => {
-          e.preventDefault();
-          dropArea.classList.add("dragover");
-        });
-        dropArea.addEventListener("dragleave", () => {
-          dropArea.classList.remove("dragover");
-        });
-        dropArea.addEventListener("drop", (e) => {
-          e.preventDefault();
-          dropArea.classList.remove("dragover");
-          if (e.dataTransfer.files.length > 0) {
-            fileElem.files = e.dataTransfer.files;
-            fileNameDiv.textContent = e.dataTransfer.files[0].name;
-            uploadForm.submit();
-          }
-        });
-        fileElem.addEventListener("change", function () {
-          if (fileElem.files.length > 0) {
-            fileNameDiv.textContent = fileElem.files[0].name;
-          }
-        });
-      }
-
       function iniciarAutomacao() {
         fetch("/start_automacao", { method: "POST" })
           .then((resp) => resp.json())
@@ -251,7 +192,6 @@
             atualizarStatus(data.session_id);
           });
       }
-
       function atualizarStatus(session_id) {
         fetch("/status_automacao/" + session_id)
           .then((resp) => resp.json())
@@ -259,6 +199,8 @@
             if (!status.total) return;
             const pct = (status.current / status.total) * 100;
             document.getElementById("progress-bar").style.width = pct + "%";
+            document.getElementById("progress-bar").innerText =
+              Math.round(pct) + "%";
             document.getElementById(
               "progress-info"
             ).textContent = `${status.current} de ${status.total}`;
@@ -268,7 +210,7 @@
             if (status.done && status.relatorio_path) {
               document.getElementById(
                 "relatorio-link"
-              ).innerHTML = `<a href="/download_relatorio/${session_id}" target="_blank">Baixar Relatório CSV</a>`;
+              ).innerHTML = `<a href="/download_relatorio/${session_id}" class="btn btn-info" target="_blank">Baixar Relatório CSV</a>`;
               if (status.stats) {
                 document.getElementById("dashboard").style.display = "";
                 renderDashboard(status.stats);
@@ -279,9 +221,11 @@
           });
       }
       function renderDashboard(stats) {
-        // Pie visual, responsivo
-        const ctx1 = document.getElementById("graficoStatus").getContext("2d");
-        new Chart(ctx1, {
+        document.getElementById("dashboard-rows").innerHTML = "";
+        let statusCanvas = document.createElement("canvas");
+        statusCanvas.id = "graficoStatus";
+        document.getElementById("dashboard-rows").appendChild(statusCanvas);
+        new Chart(statusCanvas.getContext("2d"), {
           type: "doughnut",
           data: {
             labels: ["Sucessos", "Erros"],
@@ -299,35 +243,39 @@
             maintainAspectRatio: false,
           },
         });
-        if (stats.categorias) {
-          const ctx2 = document
-            .getElementById("graficoCategorias")
-            .getContext("2d");
-          new Chart(ctx2, {
-            type: "bar",
-            data: {
-              labels: Object.keys(stats.categorias),
-              datasets: [
-                {
-                  data: Object.values(stats.categorias),
-                  backgroundColor: "#3399ff",
-                },
-              ],
-            },
-            options: {
-              plugins: { legend: { display: false } },
-              scales: {
-                x: { ticks: { font: { size: 13 } } },
-                y: {
-                  beginAtZero: true,
-                  display: true,
-                  grid: { display: true },
-                },
+        for (const key in stats) {
+          if (key !== "sucesso" && key !== "erro") {
+            let header = document.createElement("h5");
+            header.innerText = "Frequência: " + key;
+            document.getElementById("dashboard-rows").appendChild(header);
+            let canvas = document.createElement("canvas");
+            document.getElementById("dashboard-rows").appendChild(canvas);
+            new Chart(canvas.getContext("2d"), {
+              type: "bar",
+              data: {
+                labels: Object.keys(stats[key]),
+                datasets: [
+                  {
+                    data: Object.values(stats[key]),
+                    backgroundColor: "#3399ff",
+                  },
+                ],
               },
-              responsive: true,
-              maintainAspectRatio: false,
-            },
-          });
+              options: {
+                plugins: { legend: { display: false } },
+                scales: {
+                  x: { ticks: { font: { size: 13 } } },
+                  y: {
+                    beginAtZero: true,
+                    display: true,
+                    grid: { display: true },
+                  },
+                },
+                responsive: true,
+                maintainAspectRatio: false,
+              },
+            });
+          }
         }
       }
     </script>

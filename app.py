@@ -6,7 +6,6 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 
 UPLOAD_FOLDER = "uploads"
 ALLOWED_EXTENSIONS = {"xlsx", "csv", "txt"}
-CAMPI_SISTEMA = ["cliente", "produto", "quantidade", "categoria"]
 
 app = Flask(__name__)
 app.secret_key = "chave_secreta"
@@ -44,9 +43,9 @@ def executar_automacao(session_id, dados_mapeados):
     }
     relatorio = []
     for idx, registro in enumerate(dados_mapeados):
-        time.sleep(1)  # Simulação - troque pelo Selenium!
+        time.sleep(1)  # Simulação
         resultado = {
-            "linha": idx+1,
+            "linha": idx + 1,
             "dados": registro,
             "status": "Sucesso",
             "mensagem": ""
@@ -67,6 +66,7 @@ def executar_automacao(session_id, dados_mapeados):
         "mensagem": r["mensagem"]
     } for r in relatorio])
     path = f"uploads/relatorio_{session_id}.csv"
+    df_relatorio.to_html(classes="table table-striped table-bordered align-middle", index=False)  # importante para o preview!
     df_relatorio.to_csv(path, index=False, encoding='utf-8-sig')
     status_execucao[session_id]['relatorio_path'] = path
     status_execucao[session_id]['done'] = True
@@ -93,9 +93,9 @@ def index():
                     df = ler_arquivo_planilha(filepath)
                     session['filepath'] = filepath
                     columns = list(df.columns)
-                    preview = df.to_html(classes="table table-striped", index=False)
+                    preview = df.to_html(classes="table table-striped table-bordered align-middle", index=False)
                     mapping_needed = True
-                    flash(f"Arquivo {filename} processado com sucesso! Faça o mapeamento dos campos abaixo.")
+                    flash(f"Arquivo {filename} processado com sucesso! Selecione as colunas para automatização.")
                 except Exception as e:
                     flash(f"Erro ao processar arquivo: {e}")
             else:
@@ -107,33 +107,34 @@ def index():
                 return redirect(url_for("index"))
             df = ler_arquivo_planilha(filepath)
             columns = list(df.columns)
-            campo2coluna = {}
-            for campo in CAMPI_SISTEMA:
-                coluna = request.form.get(campo)
-                if not coluna:
-                    flash(f"Campo obrigatório não mapeado: {campo}")
-                    preview = df.to_html(classes="table table-striped", index=False)
-                    mapping_needed = True
-                    return render_template("index.html", preview=preview, columns=columns, mapping_needed=mapping_needed, campi_sistema=CAMPI_SISTEMA)
-                campo2coluna[campo] = coluna
-            flash(f"Mapeamento realizado! Selecione os registros desejados para automatizar.")
-            dados_mapeados = df[[campo2coluna[campo] for campo in CAMPI_SISTEMA]].copy()
-            dados_mapeados.columns = CAMPI_SISTEMA
+            colunas_selecionadas = request.form.getlist("colunas_selecionadas")
+            if not colunas_selecionadas:
+                preview = df.to_html(classes="table table-striped table-bordered align-middle", index=False)
+                flash("Selecione ao menos uma coluna.")
+                mapping_needed = True
+                return render_template("index.html", preview=preview, columns=columns, mapping_needed=mapping_needed)
+            novos_nomes = []
+            for col in colunas_selecionadas:
+                novo_nome = request.form.get(f"novo_nome_{col}", col)
+                novos_nomes.append(novo_nome if novo_nome else col)
+            dados_mapeados = df[colunas_selecionadas].copy()
+            dados_mapeados.columns = novos_nomes
             session['dados_mapeados'] = dados_mapeados.to_dict(orient='records')
+            session['selected_columns'] = novos_nomes
             selecao_parcial = True
-            return render_template("index.html", dados=dados_mapeados.to_dict(orient='records'),
-                                   columns=CAMPI_SISTEMA, selecao_parcial=selecao_parcial, campi_sistema=CAMPI_SISTEMA)
+            return render_template("index.html", dados=dados_mapeados.to_dict(orient='records'), columns=novos_nomes, selecao_parcial=selecao_parcial)
         elif "filtrar_e_processar" in request.form:
             all_data = session.get('dados_mapeados', [])
+            colunas = session.get('selected_columns', [])
             selecionados = [int(idx) for idx in request.form.getlist('selected')]
             dados_filtrados = [row for idx, row in enumerate(all_data) if idx in selecionados]
             session['dados_mapeados'] = dados_filtrados
             pronto_automacao = True
             dados_preview = pd.DataFrame(dados_filtrados)
-            return render_template("index.html", preview=dados_preview.to_html(classes="table table-striped", index=False),
-                                   columns=CAMPI_SISTEMA, pronto_automacao=pronto_automacao, campi_sistema=CAMPI_SISTEMA)
+            preview = dados_preview.to_html(classes="table table-striped table-bordered align-middle", index=False)
+            return render_template("index.html", preview=preview, columns=colunas, pronto_automacao=pronto_automacao)
 
-    return render_template("index.html", preview=preview, columns=columns, mapping_needed=mapping_needed, campi_sistema=CAMPI_SISTEMA)
+    return render_template("index.html", preview=preview, columns=columns, mapping_needed=mapping_needed)
 
 @app.route("/start_automacao", methods=["POST"])
 def start_automacao():
@@ -150,8 +151,10 @@ def status_automacao(session_id):
         df = pd.read_csv(status["relatorio_path"])
         stats["sucesso"] = int((df["status"] == "Sucesso").sum())
         stats["erro"] = int((df["status"] == "Erro").sum())
-        if "categoria" in df.columns:
-            stats["categorias"] = df["categoria"].value_counts().to_dict()
+        for col in df.columns:
+            if col not in ["linha", "status", "mensagem"] and col.lower() not in ["nome", "data"]:
+                if df[col].nunique() > 1 and df[col].nunique() <= 15:
+                    stats[col] = df[col].value_counts().to_dict()
     status["stats"] = stats
     return jsonify(status)
 
